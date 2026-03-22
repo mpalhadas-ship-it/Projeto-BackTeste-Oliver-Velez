@@ -105,30 +105,29 @@
 const API_KEY = "623474460dfb40f392a9e6907bfba8ea";
 
 const SETUPS_LIST = [
-  {id:"BE_BULL",      name:"🐘 BE Bull",         color:"#16a34a"},
-  {id:"BE_BEAR",      name:"🐘 BE Bear",         color:"#dc2626"},
-  {id:"BULL_180",     name:"🔄 Bull 180",        color:"#16a34a"},
-  {id:"BEAR_180",     name:"🔄 Bear 180",        color:"#dc2626"},
-  {id:"BT",           name:"📍 BT",              color:"#16a34a"},
-  {id:"TT",           name:"📍 TT",              color:"#dc2626"},
-  {id:"NRB",          name:"🔬 NRB",             color:"#7c3aed"},
-  {id:"GBR",          name:"🟢 GBR",             color:"#16a34a"},
-  {id:"RBR",          name:"🔴 RBR",             color:"#dc2626"},
-  {id:"RBTO",         name:"📈 RBTO",            color:"#16a34a"},
-  {id:"GBTO",         name:"📉 GBTO",            color:"#dc2626"},
-  {id:"RBI",          name:"🚫🔴 RBI",           color:"#16a34a"},
-  {id:"GBI",          name:"🚫🟢 GBI",           color:"#dc2626"},
-  {id:"2CORES_BULL",  name:"2️⃣ 2 Cores Bull",   color:"#16a34a"},
-  {id:"2CORES_BEAR",  name:"2️⃣ 2 Cores Bear",   color:"#dc2626"},
-  {id:"DUPLA_FUNDO",  name:"👥 Dupla Fundo",     color:"#16a34a"},
-  {id:"DUPLA_TOPO",   name:"👥 Dupla Topo",      color:"#dc2626"},
-  {id:"MARCH_BULL",   name:"🟢🟢🟢 March Bull",  color:"#16a34a"},
-  {id:"MARCH_BEAR",   name:"🔴🔴🔴 March Bear",  color:"#dc2626"},
-  {id:"TTTO",         name:"⬆️ TTTO",            color:"#16a34a"},
-  {id:"BTTO",         name:"⬇️ BTTO",            color:"#dc2626"},
-
-  {id:"GBR_VBS",      name:"🟢 GBR→VBS",        color:"#16a34a"},
-  {id:"RBR_VSS",      name:"🔴 RBR→VSS",        color:"#dc2626"},
+  {id:"BE_BULL",      name:"🐘 BE Bull",         color:"#16a34a", dir:"buy"},
+  {id:"BE_BEAR",      name:"🐘 BE Bear",         color:"#dc2626", dir:"sell"},
+  {id:"BULL_180",     name:"🔄 Bull 180",        color:"#16a34a", dir:"buy"},
+  {id:"BEAR_180",     name:"🔄 Bear 180",        color:"#dc2626", dir:"sell"},
+  {id:"BT",           name:"📍 BT",              color:"#16a34a", dir:"buy"},
+  {id:"TT",           name:"📍 TT",              color:"#dc2626", dir:"sell"},
+  {id:"NRB",          name:"🔬 NRB",             color:"#7c3aed", dir:"any"},
+  {id:"GBR",          name:"🟢 GBR",             color:"#16a34a", dir:"buy"},
+  {id:"RBR",          name:"🔴 RBR",             color:"#dc2626", dir:"sell"},
+  {id:"RBTO",         name:"📈 RBTO",            color:"#16a34a", dir:"buy"},
+  {id:"GBTO",         name:"📉 GBTO",            color:"#dc2626", dir:"sell"},
+  {id:"RBI",          name:"🚫🔴 RBI",           color:"#16a34a", dir:"buy"},
+  {id:"GBI",          name:"🚫🟢 GBI",           color:"#dc2626", dir:"sell"},
+  {id:"2CORES_BULL",  name:"2️⃣ 2 Cores Bull",   color:"#16a34a", dir:"buy"},
+  {id:"2CORES_BEAR",  name:"2️⃣ 2 Cores Bear",   color:"#dc2626", dir:"sell"},
+  {id:"DUPLA_FUNDO",  name:"👥 Dupla Fundo",     color:"#16a34a", dir:"buy"},
+  {id:"DUPLA_TOPO",   name:"👥 Dupla Topo",      color:"#dc2626", dir:"sell"},
+  {id:"MARCH_BULL",   name:"🟢🟢🟢 March Bull",  color:"#16a34a", dir:"buy"},
+  {id:"MARCH_BEAR",   name:"🔴🔴🔴 March Bear",  color:"#dc2626", dir:"sell"},
+  {id:"TTTO",         name:"⬆️ TTTO",            color:"#16a34a", dir:"buy"},
+  {id:"BTTO",         name:"⬇️ BTTO",            color:"#dc2626", dir:"sell"},
+  {id:"GBR_VBS",      name:"🟢 GBR→VBS",        color:"#16a34a", dir:"buy"},
+  {id:"RBR_VSS",      name:"🔴 RBR→VSS",        color:"#dc2626", dir:"sell"},
 ];
 
 let selectedSetup = null;
@@ -266,15 +265,39 @@ async function buscarDados(){
         const sma8   = calcSMA(closes,8);
         const sma20  = calcSMA(closes,20);
         const loc    = getLOC(candles[i].close, sma8, sma20);
+        const setup  = SETUPS_LIST.find(s=>s.id===selectedSetup);
+        const dir    = setup?.dir||"buy";
+        const entry  = candles[i].close;
+        const prev   = candles[i-1];
+
+        // Stop = mínima do candle anterior (compra) ou máxima (venda)
+        let stop, alvo1, alvo2;
+        if(dir==="buy"){
+          stop  = prev.low;
+          const r = entry - stop;
+          alvo1 = entry + r;
+          alvo2 = entry + r*2;
+        } else if(dir==="sell"){
+          stop  = prev.high;
+          const r = stop - entry;
+          alvo1 = entry - r;
+          alvo2 = entry - r*2;
+        } else {
+          // NRB — neutro, usa range do candle
+          stop  = null; alvo1 = null; alvo2 = null;
+        }
+        const R = stop ? Math.abs(entry - stop).toFixed(2) : null;
+
         ocorrencias.push({
           idx: i,
           datetime: candles[i].datetime,
-          price: candles[i].close,
+          price: entry,
           high:  candles[i].high,
           low:   candles[i].low,
           loc,
           sma8:  sma8?sma8.toFixed(2):null,
           sma20: sma20?sma20.toFixed(2):null,
+          dir, entry, stop, alvo1, alvo2, R,
         });
       }
     }
@@ -325,6 +348,11 @@ function renderTable(){
           <th>LOC</th>
           <th>MM8</th>
           <th>MM20</th>
+          <th>Entrada</th>
+          <th>Stop</th>
+          <th>Alvo 1R</th>
+          <th>Alvo 2R</th>
+          <th>Tamanho R</th>
           <th>Resultado</th>
         </tr>
       </thead>
@@ -340,11 +368,15 @@ function renderTable(){
             <td>${o.loc?`<span class="loc-badge" style="background:${locColors[o.loc]}22;color:${locColors[o.loc]};">LOC${o.loc}</span>`:"—"}</td>
             <td style="font-size:12px;color:#64748b;">${o.sma8||"—"}</td>
             <td style="font-size:12px;color:#64748b;">${o.sma20||"—"}</td>
+            <td style="font-weight:700;color:#0f172a;">${o.entry?o.entry.toFixed(2):"—"}</td>
+            <td style="font-weight:700;color:#dc2626;">${o.stop?o.stop.toFixed(2):"—"}</td>
+            <td style="font-weight:700;color:#16a34a;">${o.alvo1?o.alvo1.toFixed(2):"—"}</td>
+            <td style="font-weight:700;color:#7c3aed;">${o.alvo2?o.alvo2.toFixed(2):"—"}</td>
+            <td style="font-size:12px;color:#64748b;">${o.R?"±"+o.R:"—"}</td>
             <td>
               <div style="display:flex;gap:6px;flex-wrap:wrap;">
                 <button class="res-btn win2 ${res==='2x1'?'active':''}" onclick="setResult('${key}','2x1')">2x1</button>
                 <button class="res-btn win1 ${res==='1x1'?'active':''}" onclick="setResult('${key}','1x1')">1x1</button>
-                <button class="res-btn be ${res==='be'?'active':''}" onclick="setResult('${key}','be')">BE</button>
                 <button class="res-btn loss ${res==='loss'?'active':''}" onclick="setResult('${key}','loss')">Loss</button>
               </div>
             </td>
