@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -222,40 +223,33 @@ function detectSetup(id, candles, i){
 
 // ─── BUSCAR ───────────────────────────────────────────────────────────────────
 async function yahooFetchM5(){
-  // Yahoo Finance — M5, range 1mo (~30 dias)
-  const proxies = [
-    url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
-    url => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
+  const urls = [
+    "https://query1.finance.yahoo.com/v8/finance/chart/GC%3DF?interval=5m&range=5d",
+    "https://query2.finance.yahoo.com/v8/finance/chart/GC%3DF?interval=5m&range=5d",
   ];
-  const base = "https://query1.finance.yahoo.com/v8/finance/chart/GC%3DF?interval=5m&range=30d";
-  for(const makeUrl of proxies){
+  for(const url of urls){
     try{
-      const r = await fetch(makeUrl(base));
+      const r = await fetch(url);
       if(!r.ok) continue;
-      const raw = await r.json();
-      // allorigins wraps in .contents
-      const j = raw.contents ? JSON.parse(raw.contents) : raw;
+      const j = await r.json();
       const res = j?.chart?.result?.[0];
       if(!res) continue;
-      const ts     = res.timestamp;
-      const quotes = res.indicators.quote[0];
+      const ts = res.timestamp;
+      const q  = res.indicators.quote[0];
       const candles = [];
       for(let i=0;i<ts.length;i++){
-        if(!quotes.close[i]) continue;
+        if(!q.close[i]) continue;
         const dt = new Date(ts[i]*1000);
         const pad = n=>String(n).padStart(2,"0");
         candles.push({
-          datetime: `${dt.getFullYear()}-${pad(dt.getMonth()+1)}-${pad(dt.getDate())} ${pad(dt.getHours())}:${pad(dt.getMinutes())}`,
-          open:  quotes.open[i],
-          high:  quotes.high[i],
-          low:   quotes.low[i],
-          close: quotes.close[i],
+          datetime:`${dt.getFullYear()}-${pad(dt.getMonth()+1)}-${pad(dt.getDate())} ${pad(dt.getHours())}:${pad(dt.getMinutes())}`,
+          open: q.open[i], high: q.high[i], low: q.low[i], close: q.close[i],
         });
       }
       if(candles.length > 10) return candles;
     }catch(e){ continue; }
   }
-  throw new Error("Yahoo M5: todos os proxies falharam");
+  throw new Error("Yahoo M5: falhou. Tente novamente.");
 }
 
 async function buscarDados(){
