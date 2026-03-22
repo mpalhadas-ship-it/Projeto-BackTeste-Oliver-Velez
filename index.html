@@ -6,6 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Backteste — Método Oliver Velez</title>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
 <style>
   *{box-sizing:border-box;margin:0;padding:0;}
   body{background:#f0f4f8;color:#1e293b;font-family:'Outfit',sans-serif;min-height:100vh;}
@@ -59,6 +60,10 @@
 
   #progress-bar{height:3px;background:#e2e8f0;}
   #progress-fill{height:100%;width:0%;background:linear-gradient(90deg,#2563eb,#7c3aed);transition:width .3s;}
+  #chart-wrap{background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.06);margin-bottom:20px;display:none;}
+  #chart-header{background:#0f172a;padding:12px 20px;display:flex;align-items:center;gap:10px;}
+  #chart-container{height:380px;width:100%;}
+  tr.highlighted td{background:#fffbeb !important;border-left:3px solid #d97706;}
 </style>
 </head>
 <body>
@@ -87,6 +92,15 @@
 
   <!-- STATS -->
   <div class="stats-grid" id="stats-grid" style="display:none;"></div>
+
+  <!-- CHART -->
+  <div id="chart-wrap">
+    <div id="chart-header">
+      <span style="color:#fff;font-size:13px;font-weight:700;">📈 Gráfico M5 — XAU/USD</span>
+      <span id="chart-info" style="margin-left:auto;font-size:11px;color:#64748b;"></span>
+    </div>
+    <div id="chart-container"></div>
+  </div>
 
   <!-- TABLE -->
   <div class="table-wrap">
@@ -305,8 +319,10 @@ async function buscarDados(){
     fill.style.width = "100%";
     document.getElementById("status").textContent = `${ocorrencias.length} ocorrências encontradas (M5 TwelveData, ~2-3 dias)`;
     setTimeout(()=>fill.style.width="0%",800);
+    allCandles = candles;
     renderTable();
     renderStats();
+    renderChart(candles, ocorrencias);
   }catch(e){
     document.getElementById("status").textContent = "Erro: "+e.message;
   }
@@ -324,6 +340,7 @@ function setResult(key, result){
   localStorage.setItem("bt_resultados", JSON.stringify(resultados));
   renderTable();
   renderStats();
+  if(allCandles.length) renderChart(allCandles, ocorrencias);
 }
 
 // ─── RENDER TABLE ─────────────────────────────────────────────────────────────
@@ -361,7 +378,7 @@ function renderTable(){
           const key = `${selectedSetup}_${o.datetime}`;
           const res = resultados[key]?.result;
           const resColor = res==="2x1"?"#7c3aed":res==="1x1"?"#16a34a":res==="loss"?"#dc2626":res==="be"?"#d97706":"";
-          return `<tr>
+          return `<tr data-idx="${i}" onclick="highlightChartTime('${o.datetime}')" style="cursor:pointer;">
             <td style="color:#94a3b8;font-weight:600;">${i+1}</td>
             <td style="font-size:12px;">${o.datetime}</td>
             <td style="font-weight:700;">${o.price.toFixed(2)}</td>
@@ -476,6 +493,81 @@ function limparResultados(){
   localStorage.setItem("bt_resultados", JSON.stringify(resultados));
   renderTable();
   renderStats();
+  if(allCandles.length) renderChart(allCandles, ocorrencias);
+}
+
+// ─── CHART ────────────────────────────────────────────────────────────────────
+let chart = null, candleSeries = null, markers = [], allCandles = [];
+
+function initChart(){
+  const container = document.getElementById("chart-container");
+  if(chart){ chart.remove(); chart = null; }
+  chart = LightweightCharts.createChart(container, {
+    width:  container.clientWidth,
+    height: 380,
+    layout: { background:{color:"#ffffff"}, textColor:"#64748b" },
+    grid:   { vertLines:{color:"#f1f5f9"}, horzLines:{color:"#f1f5f9"} },
+    crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+    rightPriceScale: { borderColor:"#e2e8f0" },
+    timeScale: { borderColor:"#e2e8f0", timeVisible:true, secondsVisible:false },
+  });
+  candleSeries = chart.addCandlestickSeries({
+    upColor:"#16a34a", downColor:"#dc2626",
+    borderUpColor:"#16a34a", borderDownColor:"#dc2626",
+    wickUpColor:"#16a34a", wickDownColor:"#dc2626",
+  });
+  window.addEventListener("resize", ()=>{
+    if(chart) chart.applyOptions({width: container.clientWidth});
+  });
+}
+
+function renderChart(candles, ocorrencias){
+  document.getElementById("chart-wrap").style.display = "block";
+  initChart();
+
+  // Set candle data
+  const data = candles.map(c=>({
+    time: Math.floor(new Date(c.datetime.replace(" ","T")).getTime()/1000),
+    open: c.open, high: c.high, low: c.low, close: c.close,
+  }));
+  candleSeries.setData(data);
+
+  // Set markers for each occurrence
+  const setup = SETUPS_LIST.find(s=>s.id===selectedSetup);
+  const mkrs = ocorrencias.map((o,i)=>{
+    const t = Math.floor(new Date(o.datetime.replace(" ","T")).getTime()/1000);
+    const isBuy = o.dir==="buy";
+    const key   = `${selectedSetup}_${o.datetime}`;
+    const res   = resultados[key]?.result;
+    const shape = isBuy ? "arrowUp" : "arrowDown";
+    const pos   = isBuy ? "belowBar" : "aboveBar";
+    const col   = res==="2x1"?"#7c3aed": res==="1x1"?"#16a34a": res==="loss"?"#dc2626": isBuy?"#2563eb":"#f97316";
+    return { time:t, position:pos, color:col, shape, text:`#${i+1}` };
+  });
+  candleSeries.setMarkers(mkrs);
+  chart.timeScale().fitContent();
+  document.getElementById("chart-info").textContent = `${ocorrencias.length} ocorrências marcadas`;
+}
+
+function highlightChartTime(datetime){
+  if(!chart) return;
+  const t = Math.floor(new Date(datetime.replace(" ","T")).getTime()/1000);
+  chart.timeScale().scrollToPosition(0, false);
+  chart.timeScale().scrollToRealTime();
+  // Set visible range around the clicked time
+  chart.timeScale().setVisibleRange({
+    from: t - 60*60,  // 1h before
+    to:   t + 60*60,  // 1h after
+  });
+}
+
+function highlightRow(idx){
+  document.querySelectorAll("tr.highlighted").forEach(r=>r.classList.remove("highlighted"));
+  const row = document.querySelector(`tr[data-idx="${idx}"]`);
+  if(row){
+    row.classList.add("highlighted");
+    row.scrollIntoView({behavior:"smooth", block:"center"});
+  }
 }
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
